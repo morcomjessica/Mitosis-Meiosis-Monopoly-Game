@@ -1,0 +1,837 @@
+bash
+
+mkdir -p /mnt/user-data/outputs/cell-division-game
+cat > /mnt/user-data/outputs/cell-division-game/index.html << 'ENDOFFILE'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cell Division Board Game 🧬</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      min-height: 100%;
+      background: #050a18;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    body { padding: 12px; }
+    h1.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+
+    /* ── SETUP ── */
+    #setup { max-width: 480px; margin: 0 auto; }
+    .setup-hero { text-align: center; margin-bottom: 1.5rem; padding-top: 1rem; }
+    .setup-hero .emoji { font-size: 52px; display: block; margin-bottom: 8px; }
+    .setup-hero h2 { font-size: 24px; font-weight: 700; color: #f1f5f9; }
+    .setup-hero p { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+    .setup-box { background: #0f172a; border: 1px solid #1e293b; border-radius: 14px; padding: 1.25rem; }
+    .setup-box label { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: 8px; }
+    .team-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .team-swatch { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; border: 2px solid rgba(255,255,255,.15); }
+    .team-row input {
+      flex: 1; background: #1e293b; border: 1px solid #334155; border-radius: 8px;
+      color: #e2e8f0; font-size: 13px; padding: 7px 10px; outline: none;
+    }
+    .team-row input:focus { border-color: #6366f1; }
+    .rm-btn { background: none; border: none; cursor: pointer; color: #475569; font-size: 18px; padding: 0 4px; line-height: 1; }
+    .rm-btn:hover { color: #ef4444; }
+    .add-btn {
+      width: 100%; background: #1e293b; border: 1px dashed #334155; border-radius: 8px;
+      padding: 8px; font-size: 12px; color: #64748b; cursor: pointer; margin-top: 4px; margin-bottom: 14px;
+    }
+    .add-btn:hover { background: #273549; color: #94a3b8; }
+    .go-btn {
+      width: 100%; padding: 12px; background: linear-gradient(135deg, #6366f1, #4f46e5);
+      border: none; border-radius: 10px; color: #fff; font-size: 15px; font-weight: 700;
+      cursor: pointer; letter-spacing: .02em; box-shadow: 0 4px 16px rgba(99,102,241,.4);
+    }
+    .go-btn:hover { background: linear-gradient(135deg, #4f46e5, #3730a3); }
+    .rules-box { margin-top: 1rem; background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 14px; }
+    .rules-box h3 { font-size: 11px; color: #6366f1; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+    .rules-box ul { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+    .rules-box li { font-size: 12px; color: #94a3b8; line-height: 1.5; }
+
+    /* ── GAME ── */
+    #game { display: none; max-width: 720px; margin: 0 auto; }
+
+    /* HUD */
+    #top-hud { width: 100%; margin-bottom: 8px; display: flex; flex-direction: column; gap: 5px; }
+    .hud-row { display: flex; gap: 6px; }
+    .hud-team {
+      display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;
+      background: #0f172a; border: 1px solid #1e293b; border-radius: 9px; padding: 5px 8px;
+      transition: border-color .3s, box-shadow .3s;
+    }
+    .hud-team.active { border-color: #fbbf24; box-shadow: 0 0 10px rgba(251,191,36,.25); }
+    .hud-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .hud-name { font-size: 10px; color: #cbd5e1; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hud-score { font-size: 12px; font-weight: 700; color: #fbbf24; white-space: nowrap; }
+    .hud-bar-wrap { flex: 2; height: 7px; background: #1e293b; border-radius: 4px; overflow: hidden; }
+    .hud-bar { height: 100%; border-radius: 4px; transition: width .5s ease; }
+    .hud-lap { font-size: 9px; color: #475569; white-space: nowrap; }
+
+    /* BOARD */
+    .board-wrap { position: relative; width: 100%; aspect-ratio: 1/1; max-width: 660px; margin: 0 auto; }
+    #board-svg { width: 100%; height: 100%; display: block; }
+
+    /* CENTER */
+    .center-panel {
+      position: absolute; top: 22%; left: 22%; width: 56%; height: 56%;
+      background: #0f172a; border: 1px solid #1e293b; border-radius: 14px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 10px; overflow: hidden; gap: 6px;
+    }
+    .cp-title { font-size: 9px; font-weight: 700; color: #475569; text-align: center; letter-spacing: .08em; text-transform: uppercase; }
+    #dice-canvas { width: 52px; height: 52px; cursor: pointer; border-radius: 10px; display: block; }
+    #dice-canvas:hover { opacity: .85; }
+    .roll-btn {
+      background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; border-radius: 8px;
+      color: #fff; font-size: 11px; font-weight: 700; padding: 6px 16px; cursor: pointer;
+      white-space: nowrap; box-shadow: 0 2px 10px rgba(99,102,241,.4);
+    }
+    .roll-btn:hover { background: linear-gradient(135deg, #4f46e5, #3730a3); }
+    .roll-btn:disabled { background: #1e293b; color: #475569; cursor: default; box-shadow: none; }
+    #status-txt { font-size: 9.5px; color: #64748b; text-align: center; padding: 0 4px; line-height: 1.4; min-height: 24px; max-width: 100%; }
+
+    /* MODAL */
+    .modal-bg {
+      position: absolute; inset: 0; background: rgba(0,0,8,.88);
+      border-radius: 14px; display: flex; align-items: center; justify-content: center;
+      padding: 14px; z-index: 200;
+    }
+    .modal-bg.hidden { display: none; }
+    .modal-card {
+      background: #0f172a; border: 1px solid #1e293b; border-radius: 16px;
+      padding: 16px; width: 100%; max-width: 400px; max-height: 94%; overflow-y: auto;
+      box-shadow: 0 12px 40px rgba(0,0,0,.7);
+    }
+    .m-tag {
+      display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .07em;
+      text-transform: uppercase; padding: 3px 10px; border-radius: 5px; margin-bottom: 10px;
+    }
+    .m-tag.q { background: #1e1b4b; color: #c7d2fe; border: 1px solid #4338ca; }
+    .m-tag.c { background: #431407; color: #fed7aa; border: 1px solid #c2410c; }
+    .m-tag.b { background: #052e16; color: #86efac; border: 1px solid #16a34a; }
+    .m-tag.p { background: #450a0a; color: #fca5a5; border: 1px solid #dc2626; }
+    .q-txt { font-size: 13px; color: #f1f5f9; line-height: 1.65; margin-bottom: 13px; font-weight: 500; }
+    #q-timer { background: #050a18; border: 1px solid #1e293b; border-radius: 8px; padding: 7px 9px; margin-bottom: 10px; }
+    .opts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .opt-b {
+      background: #1e293b; border: 1.5px solid #334155; border-radius: 9px;
+      padding: 10px 11px; font-size: 12px; color: #cbd5e1; cursor: pointer;
+      text-align: left; line-height: 1.45; font-weight: 500; transition: all .15s;
+    }
+    .opt-b:hover:not(:disabled) { background: #273549; border-color: #6366f1; color: #fff; }
+    .opt-b.correct { background: #052e16 !important; border-color: #22c55e !important; color: #86efac !important; font-weight: 700; }
+    .opt-b.wrong   { background: #450a0a !important; border-color: #ef4444 !important; color: #fca5a5 !important; }
+    .opt-b:disabled { cursor: default; }
+    .fb-box { margin-top: 11px; padding: 10px 12px; border-radius: 9px; font-size: 11.5px; line-height: 1.55; }
+    .fb-box.ok  { background: #052e16; color: #86efac; border: 1px solid #16a34a; }
+    .fb-box.bad { background: #450a0a; color: #fca5a5; border: 1px solid #dc2626; }
+    .m-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+    .m-btn { border: 1px solid #334155; border-radius: 8px; background: #1e293b; color: #cbd5e1; font-size: 12px; padding: 7px 16px; cursor: pointer; }
+    .m-btn.pri { background: #4f46e5; border-color: #4f46e5; color: #fff; font-weight: 700; }
+    .m-btn:hover { background: #273549; }
+    .m-btn.pri:hover { background: #3730a3; }
+
+    /* WIN */
+    #winscreen { display: none; max-width: 480px; margin: 0 auto; padding: 1rem; }
+    .win-box { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 2rem 1.5rem; text-align: center; }
+    .win-box .trophy { font-size: 56px; display: block; margin-bottom: 12px; }
+    .win-box h2 { font-size: 26px; font-weight: 800; color: #f1f5f9; margin-bottom: 6px; }
+    .win-box p { font-size: 13px; color: #94a3b8; margin-bottom: 1.5rem; }
+    .final-scores { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; margin-bottom: 1.5rem; }
+    .fs-item { text-align: center; }
+    .fs-num { font-size: 32px; font-weight: 800; }
+    .fs-lbl { font-size: 11px; color: #94a3b8; }
+    .play-again {
+      background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; border-radius: 10px;
+      color: #fff; font-size: 14px; font-weight: 700; padding: 12px 32px; cursor: pointer;
+      box-shadow: 0 4px 16px rgba(99,102,241,.4);
+    }
+    .play-again:hover { background: linear-gradient(135deg, #4f46e5, #3730a3); }
+
+    @media (max-width: 500px) {
+      .opts-grid { grid-template-columns: 1fr; }
+      .hud-bar-wrap { display: none; }
+    }
+  </style>
+</head>
+<body>
+<h1 class="sr-only">Cell Division Board Game — Mitosis &amp; Meiosis</h1>
+
+<!-- ══ SETUP ══ -->
+<div id="setup">
+  <div class="setup-hero">
+    <span class="emoji">🧬</span>
+    <h2>Cell Division Board Game</h2>
+    <p>Monopoly-style biology — roll, move, answer questions to win!</p>
+  </div>
+  <div class="setup-box">
+    <label>Players / Teams (2–6)</label>
+    <div id="teams-list"></div>
+    <button class="add-btn" id="add-team-btn" onclick="addTeam()">＋ Add another team</button>
+    <button class="go-btn" onclick="startGame()">Start Game 🎲</button>
+  </div>
+  <div class="rules-box">
+    <h3>How to Play</h3>
+    <ul>
+      <li>❓ <strong>Question</strong> — answer correctly to earn <strong>+1 pt</strong></li>
+      <li>🔥 <strong>Challenge</strong> — harder question worth <strong>+2 pts</strong></li>
+      <li>⭐ <strong>Bonus</strong> — free <strong>+1 pt</strong>, no question needed</li>
+      <li>💀 <strong>Penalty</strong> — move back <strong>3 spaces</strong></li>
+      <li>⏱ You have <strong>3 minutes</strong> per question — don't run out of time!</li>
+      <li>🏆 First team to complete <strong>2 full laps</strong> wins!</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══ GAME ══ -->
+<div id="game">
+  <div id="top-hud"></div>
+  <div class="board-wrap">
+    <svg id="board-svg" viewBox="0 0 660 660" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="center-panel">
+      <div class="cp-title">🧬 Cell Division Game</div>
+      <canvas id="dice-canvas" width="52" height="52" title="Click to roll" onclick="rollDice()"></canvas>
+      <button class="roll-btn" id="roll-btn" onclick="rollDice()">Roll Dice</button>
+      <div id="status-txt">Roll to begin!</div>
+    </div>
+    <div class="modal-bg hidden" id="modal-bg">
+      <div class="modal-card" id="modal-card"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ WIN ══ -->
+<div id="winscreen">
+  <div class="win-box">
+    <span class="trophy">🏆</span>
+    <h2 id="win-title"></h2>
+    <p id="win-sub"></p>
+    <div class="final-scores" id="final-scores"></div>
+    <button class="play-again" onclick="location.reload()">Play Again 🎲</button>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════
+   CONSTANTS
+══════════════════════════════════════ */
+const TEAM_COLORS = ['#ef4444','#3b82f6','#22c55e','#a855f7','#f59e0b','#06b6d4'];
+const TEAM_DEFAULTS = ['Team 1','Team 2','Team 3','Team 4','Team 5','Team 6'];
+let teamCount = 2;
+
+/* ══════════════════════════════════════
+   SETUP
+══════════════════════════════════════ */
+function buildTeamsList() {
+  const el = document.getElementById('teams-list');
+  el.innerHTML = '';
+  for (let i = 0; i < teamCount; i++) {
+    const row = document.createElement('div');
+    row.className = 'team-row';
+    const rmBtn = teamCount > 2
+      ? `<button class="rm-btn" onclick="removeTeam(${i})" title="Remove">×</button>`
+      : '';
+    row.innerHTML = `
+      <div class="team-swatch" style="background:${TEAM_COLORS[i]}"></div>
+      <input type="text" id="tn${i}" value="${TEAM_DEFAULTS[i]}" autocomplete="off">
+      ${rmBtn}`;
+    el.appendChild(row);
+  }
+  document.getElementById('add-team-btn').style.display = teamCount >= 6 ? 'none' : 'block';
+}
+function addTeam() { if (teamCount < 6) { teamCount++; buildTeamsList(); } }
+function removeTeam(i) {
+  if (teamCount <= 2) return;
+  // Read current values before rebuilding
+  for (let j = 0; j < teamCount; j++) {
+    const el = document.getElementById('tn' + j);
+    if (el) TEAM_DEFAULTS[j] = el.value;
+  }
+  TEAM_DEFAULTS.splice(i, 1);
+  TEAM_DEFAULTS.push('Team ' + (teamCount));
+  teamCount--;
+  buildTeamsList();
+}
+buildTeamsList();
+
+/* ══════════════════════════════════════
+   BOARD DEFINITION
+══════════════════════════════════════ */
+const BOARD_SIZE = 40;
+const SP_TYPES = [
+  'start','question','question','question','challenge','question','question','challenge','bonus','question',
+  'corner','question','challenge','question','question','penalty','question','question','challenge','corner',
+  'question','question','challenge','question','question','challenge','question','question','challenge','corner',
+  'question','question','challenge','question','question','penalty','question','question','challenge','corner'
+];
+const SP_LABELS = [
+  'GO','Cell\nCycle','Interphase','Mitosis','CHALLENGE','DNA\nReplic.','Chromosomes','CHALLENGE','BONUS!','Cell\nCycle',
+  'CORNER','Prophase','CHALLENGE','Metaphase','Anaphase','PENALTY','Telophase','Cytokinesis','CHALLENGE','CORNER',
+  'Meiosis','Diploid','CHALLENGE','Haploid','Gametes','CHALLENGE','Meiosis I','Meiosis II','CHALLENGE','CORNER',
+  'Prophase I','Crossing\nOver','CHALLENGE','Metaphase I','Anaphase I','PENALTY','Telophase I','Genes','CHALLENGE','CORNER'
+];
+const SP_EMOJI = [
+  '🧬','🔄','🔬','🔵','🔥','🧪','🔗','🔥','⭐','⏱️',
+  '🟣','📐','🔥','📏','➡️','💀','📦','✂️','🔥','🟣',
+  '🔀','2️⃣','🔥','1️⃣','🥚','🔥','➗','🔁','🔥','🟣',
+  '🌀','✖️','🔥','🟰','↕️','💀','📦','🧬','🔥','🟣'
+];
+const SP_FILL   = {start:'#1e3a5f',question:'#0d1f3c',challenge:'#2d1a00',bonus:'#0a2e1a',penalty:'#2d0a0a',corner:'#050a18'};
+const SP_STROKE = {start:'#3b82f6',question:'#2563eb',challenge:'#c2410c',bonus:'#15803d',penalty:'#991b1b',corner:'#1e293b'};
+const SP_TEXT   = {start:'#93c5fd',question:'#7dd3fc',challenge:'#fb923c',bonus:'#4ade80',penalty:'#f87171',corner:'#818cf8'};
+
+/* ══════════════════════════════════════
+   BOARD GEOMETRY
+══════════════════════════════════════ */
+function spaceCoords(i) {
+  const S=660, M=40, cell=(S-2*M)/10;
+  if (i < 10) { const x = S-M - i*cell; return {x:x-cell, y:S-M-cell, w:cell, h:cell}; }
+  if (i < 20) { const j=i-10; return {x:S-M-cell, y:S-M-cell - j*cell, w:cell, h:cell}; }
+  if (i < 30) { const j=i-20; return {x:M + j*cell, y:M, w:cell, h:cell}; }
+  const j=i-30; return {x:M, y:M + j*cell, w:cell, h:cell};
+}
+function spaceCX(i) { const c=spaceCoords(i); return c.x+c.w/2; }
+function spaceCY(i) { const c=spaceCoords(i); return c.y+c.h/2; }
+
+/* ══════════════════════════════════════
+   GAME STATE
+══════════════════════════════════════ */
+let G = {};
+let diceAnim = null;
+let qTimerInterval = null;
+let qTimerSecs = 180;
+
+/* ══════════════════════════════════════
+   DRAW BOARD
+══════════════════════════════════════ */
+function drawBoard() {
+  const svg = document.getElementById('board-svg');
+  svg.innerHTML = '';
+  const ns = 'http://www.w3.org/2000/svg';
+
+  // Background
+  const bg = mkEl(ns,'rect',{x:0,y:0,width:660,height:660,fill:'#020817',rx:16});
+  svg.appendChild(bg);
+  svg.appendChild(mkEl(ns,'rect',{x:2,y:2,width:656,height:656,fill:'none',stroke:'#1e3a5f','stroke-width':2,rx:15}));
+  svg.appendChild(mkEl(ns,'rect',{x:38,y:38,width:584,height:584,fill:'none',stroke:'#0f172a','stroke-width':1,rx:4}));
+
+  for (let i = 0; i < BOARD_SIZE; i++) {
+    const c = spaceCoords(i);
+    const type = SP_TYPES[i];
+    const fill   = SP_FILL[type]   || '#0d1f3c';
+    const stroke = SP_STROKE[type] || '#1e293b';
+    const col    = SP_TEXT[type]   || '#64748b';
+    const cx = c.x + c.w/2, cy = c.y + c.h/2;
+
+    // Tile
+    svg.appendChild(mkEl(ns,'rect',{x:c.x+1,y:c.y+1,width:c.w-2,height:c.h-2,fill,stroke,'stroke-width':1.5,rx:4}));
+    // Top strip
+    svg.appendChild(mkEl(ns,'rect',{x:c.x+1,y:c.y+1,width:c.w-2,height:5,fill:stroke,rx:4}));
+
+    // Emoji
+    const em = document.createElementNS(ns,'text');
+    Object.assign(em, {}); 
+    em.setAttribute('x', cx); em.setAttribute('y', cy-5);
+    em.setAttribute('text-anchor','middle'); em.setAttribute('font-size','13');
+    em.setAttribute('dominant-baseline','middle');
+    em.textContent = SP_EMOJI[i] || '';
+    svg.appendChild(em);
+
+    // Label
+    const lines = (SP_LABELS[i]||'').split('\n');
+    lines.forEach((ln, li) => {
+      const t = document.createElementNS(ns,'text');
+      t.setAttribute('x', cx); t.setAttribute('y', cy + 8 + li*7);
+      t.setAttribute('text-anchor','middle'); t.setAttribute('font-size','6.5');
+      t.setAttribute('font-family','sans-serif'); t.setAttribute('fill', col);
+      t.setAttribute('font-weight','700');
+      t.textContent = ln;
+      svg.appendChild(t);
+    });
+  }
+  drawTokens();
+}
+
+function mkEl(ns, tag, attrs) {
+  const el = document.createElementNS(ns, tag);
+  for (const [k,v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+/* ══════════════════════════════════════
+   DRAW TOKENS
+══════════════════════════════════════ */
+function drawTokens() {
+  const svg = document.getElementById('board-svg');
+  const ns = 'http://www.w3.org/2000/svg';
+  svg.querySelectorAll('.tok').forEach(e => e.remove());
+
+  const atPos = {};
+  G.teams.forEach((t, ti) => { (atPos[t.pos] = atPos[t.pos]||[]).push(ti); });
+
+  Object.keys(atPos).forEach(pos => {
+    const list = atPos[pos];
+    const cx = spaceCX(+pos), cy = spaceCY(+pos);
+    const n = list.length;
+
+    list.forEach((ti, li) => {
+      const ox = n > 1 ? (li - (n-1)/2) * 10 : 0;
+      const col = TEAM_COLORS[ti];
+      const isActive = (ti === G.turn);
+      const g = document.createElementNS(ns,'g');
+      g.setAttribute('class','tok');
+
+      if (isActive) {
+        // Outer glow rings
+        g.appendChild(mkEl(ns,'circle',{cx:cx+ox,cy:cy-3,r:15,fill:'none',stroke:'#fbbf24','stroke-width':2.5,opacity:.8}));
+        g.appendChild(mkEl(ns,'circle',{cx:cx+ox,cy:cy-3,r:19,fill:'none',stroke:'#fbbf24','stroke-width':1,opacity:.3}));
+      }
+      // Shadow
+      g.appendChild(mkEl(ns,'ellipse',{cx:cx+ox+1,cy:cy+10,rx:7,ry:3,fill:'rgba(0,0,0,0.5)'}));
+      // Base
+      g.appendChild(mkEl(ns,'ellipse',{cx:cx+ox,cy:cy+8,rx:7,ry:3.5,fill:col,opacity:.9}));
+      // Body
+      g.appendChild(mkEl(ns,'rect',{x:cx+ox-4.5,y:cy-1,width:9,height:10,rx:4.5,fill:col}));
+      // Neck
+      g.appendChild(mkEl(ns,'rect',{x:cx+ox-2.5,y:cy-6,width:5,height:5,fill:col}));
+      // Head
+      g.appendChild(mkEl(ns,'circle',{cx:cx+ox,cy:cy-9,r:6.5,fill:col}));
+      // Shine
+      g.appendChild(mkEl(ns,'circle',{cx:cx+ox-2,cy:cy-11,r:2.5,fill:'rgba(255,255,255,0.3)'}));
+      // Team number
+      const lbl = document.createElementNS(ns,'text');
+      lbl.setAttribute('x', cx+ox); lbl.setAttribute('y', cy-7);
+      lbl.setAttribute('text-anchor','middle'); lbl.setAttribute('font-size','7');
+      lbl.setAttribute('font-family','sans-serif'); lbl.setAttribute('fill','#fff');
+      lbl.setAttribute('font-weight','800'); lbl.setAttribute('dominant-baseline','middle');
+      lbl.textContent = String(ti+1);
+      g.appendChild(lbl);
+      // Crown for active
+      if (isActive) {
+        const crown = document.createElementNS(ns,'text');
+        crown.setAttribute('x', cx+ox); crown.setAttribute('y', cy-21);
+        crown.setAttribute('text-anchor','middle'); crown.setAttribute('font-size','10');
+        crown.textContent = '👑';
+        g.appendChild(crown);
+      }
+      svg.appendChild(g);
+    });
+  });
+}
+
+/* ══════════════════════════════════════
+   DICE
+══════════════════════════════════════ */
+function drawDice(val, rolling) {
+  const canvas = document.getElementById('dice-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,52,52);
+  // Face
+  ctx.fillStyle = '#1e293b';
+  rrect(ctx,1,1,50,50,10); ctx.fill();
+  ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 2;
+  rrect(ctx,1,1,50,50,10); ctx.stroke();
+
+  if (rolling) {
+    ctx.fillStyle = '#818cf8';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('?', 26, 27);
+  } else {
+    ctx.fillStyle = '#e2e8f0';
+    const DOTS = {
+      1:[[26,26]],
+      2:[[14,14],[38,38]],
+      3:[[14,14],[26,26],[38,38]],
+      4:[[14,14],[38,14],[14,38],[38,38]],
+      5:[[14,14],[38,14],[26,26],[14,38],[38,38]],
+      6:[[14,13],[38,13],[14,26],[38,26],[14,39],[38,39]]
+    };
+    (DOTS[val]||DOTS[1]).forEach(([dx,dy]) => {
+      ctx.beginPath(); ctx.arc(dx,dy,4.5,0,Math.PI*2); ctx.fill();
+    });
+  }
+}
+function rrect(ctx,x,y,w,h,r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+function animateDice(finalVal, cb) {
+  let frame = 0;
+  if (diceAnim) clearInterval(diceAnim);
+  diceAnim = setInterval(() => {
+    frame++;
+    drawDice(Math.floor(Math.random()*6)+1, true);
+    if (frame >= 20) { clearInterval(diceAnim); diceAnim = null; drawDice(finalVal, false); cb(); }
+  }, 55);
+}
+
+/* ══════════════════════════════════════
+   HUD
+══════════════════════════════════════ */
+function updateHUD() {
+  const hud = document.getElementById('top-hud');
+  const maxScore = Math.max(...G.teams.map(t => t.score), 5);
+  const perRow = G.teams.length <= 3 ? G.teams.length : Math.ceil(G.teams.length / 2);
+  let html = '';
+  for (let r = 0; r < Math.ceil(G.teams.length / perRow); r++) {
+    html += '<div class="hud-row">';
+    for (let c = 0; c < perRow; c++) {
+      const ti = r * perRow + c;
+      if (ti >= G.teams.length) break;
+      const t = G.teams[ti];
+      const pct = Math.min(100, Math.round(t.score / maxScore * 100));
+      const active = ti === G.turn ? ' active' : '';
+      html += `<div class="hud-team${active}">
+        <div class="hud-dot" style="background:${TEAM_COLORS[ti]}"></div>
+        <span class="hud-name">${esc(t.name)}</span>
+        <div class="hud-bar-wrap"><div class="hud-bar" style="width:${pct}%;background:${TEAM_COLORS[ti]}"></div></div>
+        <span class="hud-score">${t.score}pts</span>
+        <span class="hud-lap">Lap ${t.laps+1}/2</span>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  hud.innerHTML = html;
+}
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function setStatus(msg) { document.getElementById('status-txt').textContent = msg; }
+
+/* ══════════════════════════════════════
+   GAME FLOW
+══════════════════════════════════════ */
+function startGame() {
+  const teams = [];
+  for (let i = 0; i < teamCount; i++) {
+    const inp = document.getElementById('tn'+i);
+    const name = (inp ? inp.value.trim() : '') || TEAM_DEFAULTS[i];
+    teams.push({ name, pos:0, score:0, laps:0 });
+  }
+  G = { teams, turn:0, rolling:false, waiting:false, currentQ:null };
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('game').style.display = 'block';
+  drawBoard();
+  drawDice(1, false);
+  updateHUD();
+  setStatus(G.teams[0].name + "'s turn — roll the dice!");
+  document.getElementById('roll-btn').textContent = 'Roll for ' + G.teams[0].name;
+}
+
+function rollDice() {
+  if (G.rolling || G.waiting) return;
+  G.rolling = true;
+  document.getElementById('roll-btn').disabled = true;
+  const val = Math.floor(Math.random()*6)+1;
+  animateDice(val, () => { G.rolling = false; moveTeam(val); });
+}
+
+function moveTeam(steps) {
+  const t = G.teams[G.turn];
+  const oldPos = t.pos;
+  t.pos = (t.pos + steps) % BOARD_SIZE;
+  const passedGo = t.pos < oldPos || (oldPos + steps) >= BOARD_SIZE;
+  if (passedGo) {
+    t.laps++; t.score++;
+    setStatus(t.name + ' passed GO! +1 bonus point 🎉');
+    if (t.laps >= 2) { drawTokens(); updateHUD(); setTimeout(showWin, 700); return; }
+  } else {
+    setStatus(t.name + ' rolled ' + steps + ' → ' + SP_LABELS[t.pos].replace('\n',' '));
+  }
+  drawTokens(); updateHUD();
+  setTimeout(() => handleSpace(t.pos), 500);
+}
+
+function handleSpace(pos) {
+  const t = G.teams[G.turn];
+  const type = SP_TYPES[pos];
+  if (type === 'question')  { showQuestion(false); }
+  else if (type === 'challenge') { showQuestion(true); }
+  else if (type === 'bonus') {
+    t.score++; updateHUD();
+    setStatus(t.name + ' landed on Bonus! ⭐ +1 free point!');
+    showInfo('b', '⭐ Bonus Space!', 'Free point awarded! ' + t.name + ' now has ' + t.score + ' pts.', endTurn);
+  } else if (type === 'penalty') {
+    t.pos = (t.pos - 3 + BOARD_SIZE) % BOARD_SIZE;
+    drawTokens(); updateHUD();
+    setStatus(t.name + ' hit a Penalty! 💀 Move back 3 spaces.');
+    showInfo('p', '💀 Penalty!', t.name + ' moves back 3 spaces to space ' + t.pos + '.', endTurn);
+  } else {
+    // corner or start
+    setStatus(t.name + ' is on a corner — pass the turn.');
+    setTimeout(endTurn, 1200);
+  }
+}
+
+function showInfo(tagCls, title, msg, cb) {
+  const card = document.getElementById('modal-card');
+  card.innerHTML = `<span class="m-tag ${tagCls}">${title}</span>
+    <div class="q-txt">${msg}</div>
+    <div class="m-btns"><button class="m-btn pri" id="infook">Continue →</button></div>`;
+  document.getElementById('modal-bg').classList.remove('hidden');
+  document.getElementById('infook').onclick = () => {
+    document.getElementById('modal-bg').classList.add('hidden');
+    cb();
+  };
+}
+
+/* ══════════════════════════════════════
+   TIMER
+══════════════════════════════════════ */
+function clearQTimer() {
+  if (qTimerInterval) { clearInterval(qTimerInterval); qTimerInterval = null; }
+}
+function startQTimer(total, onExpire) {
+  clearQTimer();
+  qTimerSecs = total;
+  renderTimer(qTimerSecs, total);
+  qTimerInterval = setInterval(() => {
+    qTimerSecs--;
+    renderTimer(qTimerSecs, total);
+    if (qTimerSecs <= 0) { clearQTimer(); onExpire(); }
+  }, 1000);
+}
+function renderTimer(remaining, total) {
+  const el = document.getElementById('q-timer');
+  if (!el) return;
+  const m = Math.floor(remaining/60), s = remaining%60;
+  const label = m + ':' + String(s).padStart(2,'0');
+  const pct = Math.max(0, remaining/total*100);
+  const col = remaining > 60 ? '#22c55e' : remaining > 30 ? '#f59e0b' : '#ef4444';
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+      <span style="font-size:10px;color:#475569;font-weight:700;letter-spacing:.05em">⏱ TIME LEFT</span>
+      <span style="font-size:14px;font-weight:800;color:${col};font-variant-numeric:tabular-nums">${label}</span>
+    </div>
+    <div style="height:5px;background:#1e293b;border-radius:3px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:${col};border-radius:3px;transition:width .9s linear"></div>
+    </div>`;
+}
+
+/* ══════════════════════════════════════
+   QUESTIONS
+══════════════════════════════════════ */
+let usedQ = [], usedC = [];
+function getQ(pool, used) {
+  const avail = pool.map((_,i)=>i).filter(i=>!used.includes(i));
+  if (!avail.length) { used.length = 0; }
+  const avail2 = pool.map((_,i)=>i).filter(i=>!used.includes(i));
+  const idx = avail2[Math.floor(Math.random()*avail2.length)];
+  used.push(idx);
+  return pool[idx];
+}
+
+function showQuestion(isChallenge) {
+  G.waiting = true;
+  const q = isChallenge ? getQ(CHALLENGE_QUESTIONS, usedC) : getQ(ALL_QUESTIONS, usedQ);
+  const pts = isChallenge ? 2 : 1;
+  const tagTxt = isChallenge ? '🔥 Challenge — +2 pts' : '❓ Question — +1 pt';
+  const tagCls = isChallenge ? 'c' : 'q';
+
+  // Shuffle options (Fisher-Yates)
+  const idx = [0,1,2,3];
+  for (let i = 3; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [idx[i],idx[j]] = [idx[j],idx[i]];
+  }
+  const shuffledOpts = idx.map(i => q.opts[i]);
+  const newCorrect = idx.indexOf(q.correct);
+
+  G.currentQ = { pts, correct: newCorrect, exp: q.exp, answered: false };
+
+  const optHTML = shuffledOpts.map((o, i) =>
+    `<button class="opt-b" id="qopt${i}">${'ABCD'[i]}. ${o}</button>`
+  ).join('');
+
+  const card = document.getElementById('modal-card');
+  card.innerHTML = `
+    <span class="m-tag ${tagCls}">${tagTxt}</span>
+    <div id="q-timer"></div>
+    <div class="q-txt">${q.text}</div>
+    <div class="opts-grid">${optHTML}</div>
+    <div id="qfb"></div>
+    <div class="m-btns" id="qbtns" style="display:none">
+      <button class="m-btn pri" id="qnext">Next Turn →</button>
+    </div>`;
+
+  document.getElementById('modal-bg').classList.remove('hidden');
+  document.getElementById('roll-btn').disabled = true;
+
+  // Attach click listeners safely (no inline onclick)
+  for (let i = 0; i < 4; i++) {
+    (function(idx) {
+      const btn = document.getElementById('qopt' + idx);
+      if (btn) btn.addEventListener('click', function onOptClick() {
+        btn.removeEventListener('click', onOptClick);
+        if (!G.currentQ || G.currentQ.answered) return;
+        clearQTimer();
+        revealAnswer(idx, false);
+      });
+    })(i);
+  }
+
+  // 3-minute countdown
+  startQTimer(180, () => {
+    if (!G.currentQ || G.currentQ.answered) return;
+    revealAnswer(null, true);
+  });
+}
+
+function revealAnswer(chosen, timedOut) {
+  if (!G.currentQ || G.currentQ.answered) return;
+  G.currentQ.answered = true;
+  clearQTimer();
+
+  const { pts, correct, exp } = G.currentQ;
+  const t = G.teams[G.turn];
+
+  // Disable all buttons
+  document.querySelectorAll('.opt-b').forEach(b => b.disabled = true);
+  // Highlight correct
+  const cBtn = document.getElementById('qopt' + correct);
+  if (cBtn) cBtn.classList.add('correct');
+
+  let fbHTML = '';
+  if (timedOut) {
+    fbHTML = `<div class="fb-box bad">⏰ Time's up! The correct answer was ${'ABCD'[correct]}. ${exp}</div>`;
+    setStatus(t.name + ' ran out of time!');
+  } else {
+    const right = (chosen === correct);
+    if (!right) {
+      const wBtn = document.getElementById('qopt' + chosen);
+      if (wBtn) wBtn.classList.add('wrong');
+    }
+    if (right) {
+      t.score += pts;
+      fbHTML = `<div class="fb-box ok">✅ Correct! +${pts} pt${pts>1?'s':''}. ${exp}</div>`;
+      setStatus(t.name + ' got it right! +' + pts + ' pts. Total: ' + t.score + ' pts.');
+    } else {
+      fbHTML = `<div class="fb-box bad">❌ Incorrect. Correct was ${'ABCD'[correct]}. ${exp}</div>`;
+      setStatus(t.name + ' got it wrong. Better luck next turn!');
+    }
+  }
+
+  document.getElementById('qfb').innerHTML = fbHTML;
+  const qbtns = document.getElementById('qbtns');
+  if (qbtns) qbtns.style.display = 'flex';
+  const qnext = document.getElementById('qnext');
+  if (qnext) qnext.onclick = () => {
+    clearQTimer();
+    document.getElementById('modal-bg').classList.add('hidden');
+    G.waiting = false;
+    G.currentQ = null;
+    updateHUD();
+    endTurn();
+  };
+  updateHUD();
+}
+
+function endTurn() {
+  clearQTimer();
+  G.turn = (G.turn + 1) % G.teams.length;
+  const name = G.teams[G.turn].name;
+  setStatus(name + "'s turn — roll the dice!");
+  document.getElementById('roll-btn').disabled = false;
+  document.getElementById('roll-btn').textContent = 'Roll for ' + name;
+  updateHUD();
+}
+
+function showWin() {
+  document.getElementById('game').style.display = 'none';
+  document.getElementById('winscreen').style.display = 'block';
+  const winner = G.teams[G.turn];
+  document.getElementById('win-title').textContent = '🏆 ' + winner.name + ' Wins!';
+  document.getElementById('win-sub').textContent = 'Completed 2 full laps first — excellent cell biology knowledge!';
+  const sorted = [...G.teams].sort((a,b) => b.score - a.score);
+  document.getElementById('final-scores').innerHTML = sorted.map(t => {
+    const ti = G.teams.indexOf(t);
+    return `<div class="fs-item">
+      <div class="fs-num" style="color:${TEAM_COLORS[ti]}">${t.score}</div>
+      <div class="fs-lbl">${esc(t.name)}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════
+   QUESTION BANK
+══════════════════════════════════════ */
+const ALL_QUESTIONS = [
+  {text:"Which phase of the cell cycle involves DNA replication?",opts:["G1 phase","S (Synthesis) phase","G2 phase","M (Mitotic) phase"],correct:1,exp:"DNA replicates during the S (Synthesis) phase via semi-conservative replication, producing two identical DNA copies."},
+  {text:"What is the BIG IDEA of mitosis?",opts:["Creates 4 haploid cells","Daughter cells are genetically identical to parent","Introduces genetic variation","Separates homologous chromosomes"],correct:1,exp:"Mitosis produces 2 diploid daughter cells genetically identical to the parent cell."},
+  {text:"Human body (somatic) cells contain how many chromosomes?",opts:["23","46","12","92"],correct:1,exp:"Human somatic cells are diploid (2n=46) — 23 pairs of homologous chromosomes, one set from each parent."},
+  {text:"Which cells enter the G0 non-dividing state?",opts:["Skin cells","Bone marrow cells","Neurons and osteocytes","Spermatogonia"],correct:2,exp:"Neurons and osteocytes enter G0, a permanent non-dividing state — which is why nerve damage is so hard to repair."},
+  {text:"During metaphase of mitosis, chromosomes do what?",opts:["Condense for the first time","Line up in single file at the equator","Sister chromatids separate","Nuclear membrane reforms"],correct:1,exp:"In metaphase, chromosomes align at the equatorial (metaphase) plate in single file, ready for separation."},
+  {text:"What is chromatin?",opts:["Condensed chromosomes during mitosis","Loose, uncondensed DNA during interphase","A protein holding chromatids together","A cell cycle checkpoint protein"],correct:1,exp:"During interphase, DNA is loose and uncondensed — this relaxed form is called chromatin."},
+  {text:"Cytokinesis produces how many daughter cells?",opts:["1 diploid cell","2 genetically identical diploid cells","2 haploid cells","4 haploid cells"],correct:1,exp:"Cytokinesis divides the cytoplasm after nuclear division, producing 2 genetically identical diploid cells."},
+  {text:"What structure forms the cleavage furrow?",opts:["Spindle fibers","A contractile ring of actin filaments","The nuclear membrane","Centromeres"],correct:1,exp:"A contractile ring of actin filaments forms at the cell's midsection, creating the cleavage furrow that pinches the cell in two."},
+  {text:"Which is NOT a phase of mitosis?",opts:["Prophase","Synthesis","Anaphase","Telophase"],correct:1,exp:"Synthesis (S phase) is part of interphase, not mitosis. The 4 phases of mitosis are: Prophase, Metaphase, Anaphase, Telophase."},
+  {text:"What happens during telophase?",opts:["Chromosomes first condense","Spindle disintegrates and nuclear membrane reforms","Sister chromatids separate","Homologous pairs align at equator"],correct:1,exp:"Telophase reverses prophase: the spindle disintegrates, nuclear membranes reform around each set of chromosomes, and chromosomes uncoil back to chromatin."},
+  {text:"In prophase of mitosis, what happens to chromatin?",opts:["It replicates its DNA","It condenses into visible chromosomes","It moves to the cell equator","It dissolves into the cytoplasm"],correct:1,exp:"During prophase, chromatin condenses and coils into visible chromosomes, and the nuclear membrane begins to disappear."},
+  {text:"The full cell cycle takes approximately how long?",opts:["1–2 hours","18–24 hours","3–5 days","Under 1 minute"],correct:1,exp:"The full cell cycle takes 18–24 hours in a typical human cell, but the actual mitosis phase takes less than 1 hour."},
+  {text:"What is a gene?",opts:["A type of chromosome","A short DNA segment coding for one protein","The entire human genome","A histone protein"],correct:1,exp:"A gene is a specific segment of DNA that contains the code (recipe) for making a particular protein."},
+  {text:"Chromosomes are made of:",opts:["RNA and lipids","DNA and histone proteins","DNA and ribosomes","Proteins only"],correct:1,exp:"Chromosomes consist of DNA tightly wound around histone proteins, forming a compact structure."},
+  {text:"How many pairs of autosomes do humans have?",opts:["23 pairs","22 pairs","1 pair","46 pairs"],correct:1,exp:"Humans have 22 pairs of autosomes plus 1 pair of sex chromosomes (XX female or XY male) = 23 pairs total."},
+  {text:"What does DNA replication produce?",opts:["2 identical double-stranded DNA molecules","4 haploid DNA strands","1 RNA copy of the DNA","A new protein sequence"],correct:0,exp:"DNA replication produces 2 identical double-stranded DNA molecules — each keeps one original strand and synthesizes one new strand (semi-conservative)."},
+  {text:"What does the G1 checkpoint verify?",opts:["DNA has been damaged","Favorable conditions: hormones, growth factors, neighboring cells","Spindle fibers have formed","Chromosomes are aligned"],correct:1,exp:"The G1 checkpoint checks whether external conditions (hormones, growth factors, neighboring cells) are suitable before committing to division."},
+  {text:"Cancer is related to mitosis because:",opts:["Cancer cells never divide","Cancer involves uncontrolled mitosis","Cancer only occurs during meiosis","Cancer cells divide by meiosis"],correct:1,exp:"Cancer is caused by uncontrolled mitosis — cells ignore normal checkpoints and proliferate without stopping."},
+  {text:"Which cell types divide constantly and rapidly throughout life?",opts:["Neurons and osteocytes","Muscle cells","Skin cells and most epithelial cells","Liver cells only"],correct:2,exp:"Skin cells and most epithelial cells divide constantly and rapidly — the outer skin layer is continually shed and replaced from deeper layers."},
+  {text:"What is cell differentiation?",opts:["Cell division by mitosis","Cells developing different shapes and functions via gene expression","DNA replication during S phase","Movement of chromosomes in anaphase"],correct:1,exp:"Cell differentiation is the process where genetically identical cells develop specialized shapes and functions based on which genes are expressed in each cell."},
+  {text:"Meiosis produces how many daughter cells total?",opts:["2 diploid cells","2 haploid cells","4 diploid cells","4 haploid cells"],correct:3,exp:"Meiosis produces 4 haploid (n=23) genetically distinct daughter cells, which become gametes (egg or sperm)."},
+  {text:"After meiosis, the daughter cells are:",opts:["Diploid and genetically identical","Haploid and genetically distinct","Diploid and genetically distinct","Haploid and genetically identical"],correct:1,exp:"Meiosis produces 4 haploid cells that are genetically distinct from each other and from the parent cell due to crossing over and random assortment."},
+  {text:"Gametes (egg and sperm) are produced by which process?",opts:["Mitosis","Meiosis","Binary fission","Cytokinesis alone"],correct:1,exp:"Meiosis produces gametes — egg cells in the ovaries and sperm cells in the testes."},
+  {text:"A haploid cell contains:",opts:["46 chromosomes (2 complete sets)","23 chromosomes (1 set)","92 chromosomes","12 chromosomes"],correct:1,exp:"Haploid cells (n=23) contain one set of chromosomes — exactly half the diploid number found in body cells."},
+  {text:"Crossing over occurs during which phase?",opts:["Metaphase I","Prophase I","Anaphase II","Telophase II"],correct:1,exp:"Crossing over (exchange of genetic material between homologous chromosomes) occurs during Prophase I of meiosis."},
+  {text:"Key difference between Metaphase I and Metaphase of mitosis?",opts:["No spindle forms in Metaphase I","Homologous PAIRS align at the equator in Metaphase I (double file)","Chromosomes don't condense in Metaphase I","Metaphase I takes much longer"],correct:1,exp:"In Metaphase I, homologous chromosome pairs (tetrads) align in double file. In mitosis, individual chromosomes line up in a single file."},
+  {text:"What happens during Anaphase I of meiosis?",opts:["Sister chromatids separate","Homologous pairs separate — sister chromatids stay joined","Nuclear membrane reforms","Crossing over begins"],correct:1,exp:"In Anaphase I, homologous chromosome pairs are pulled to opposite poles, but sister chromatids remain joined at the centromere."},
+  {text:"After Meiosis I is complete, each daughter cell has:",opts:["46 chromosomes","23 chromosomes (each still as 2 sister chromatids)","92 chromosomes","12 chromosomes"],correct:1,exp:"After Meiosis I (the reduction step), each of the 2 daughter cells has 23 chromosomes, each chromosome still consisting of 2 joined sister chromatids."},
+  {text:"Meiosis II is most similar to:",opts:["Interphase","Mitosis","G1 phase","DNA replication"],correct:1,exp:"Meiosis II is equivalent to mitosis — sister chromatids separate, producing 4 total haploid cells."},
+  {text:"The final result of meiosis from one diploid cell is:",opts:["2 genetically identical diploid cells","2 haploid cells","4 genetically identical diploid cells","4 genetically distinct haploid cells"],correct:3,exp:"Meiosis produces 4 haploid (n=23) cells that are all genetically distinct from each other and from the parent cell."},
+  {text:"Which process reduces chromosome number from 2n to n?",opts:["Mitosis","Meiosis I (the reduction step)","Cytokinesis","DNA replication"],correct:1,exp:"Meiosis I is the reduction step — it separates homologous pairs, halving chromosome number from 2n=46 to n=23."},
+  {text:"When sperm (n=23) fertilizes an egg (n=23), the result is:",opts:["A haploid zygote with 23","A diploid zygote with 46","A tetraploid with 92","A cell with 23 pairs"],correct:1,exp:"Fertilization restores the diploid number — sperm (n=23) + egg (n=23) = zygote (2n=46), which will develop into an embryo."},
+  {text:"What is the specific purpose of the S phase?",opts:["The cell grows larger","DNA replicates so each daughter cell receives a full copy","The nucleus divides","Chromosomes condense"],correct:1,exp:"The S (Synthesis) phase is dedicated to DNA replication — ensuring each daughter cell will receive a complete, identical copy of the genome."},
+  {text:"Sister chromatids are held together at the:",opts:["Spindle fiber attachment site","Centromere","Nuclear membrane","Cleavage furrow"],correct:1,exp:"The centromere is the constriction point that holds two sister chromatids together until they are pulled apart during anaphase."},
+  {text:"Spindle fibers are made of:",opts:["Actin filaments","Microtubules","DNA strands","Histone proteins"],correct:1,exp:"Spindle fibers are composed of microtubules — they attach to centromeres at kinetochores and pull chromosomes to opposite poles."},
+  {text:"What is semi-conservative DNA replication?",opts:["Both strands in each new molecule are newly made","Each new molecule has one original strand + one new strand","Both original strands stay together in one molecule","DNA is copied into RNA first"],correct:1,exp:"Semi-conservative replication means each new DNA double helix consists of one original (parent) strand paired with one newly synthesized strand."},
+  {text:"Cell differentiation ultimately depends on:",opts:["The number of chromosomes","Which genes are expressed in that cell (gene expression)","How many times the cell has divided","Whether the cell is haploid or diploid"],correct:1,exp:"Differentiation depends on gene expression — the cell's environment signals which genes to turn on or off, leading to different cell types."},
+  {text:"The G2 checkpoint verifies:",opts:["Growth factors are present outside the cell","DNA was replicated correctly and the cell is ready to divide","All chromosomes are aligned at the equator","Gametes have formed correctly"],correct:1,exp:"The G2 checkpoint confirms DNA replicated without errors and the cell has grown sufficiently before entering mitosis."},
+  {text:"In DNA, adenine (A) pairs with which base?",opts:["Cytosine (C)","Guanine (G)","Thymine (T)","Uracil (U)"],correct:2,exp:"DNA base pairing rules: A pairs with T (Adenine–Thymine) and G pairs with C (Guanine–Cytosine) via hydrogen bonds."},
+  {text:"What is the role of centrioles in mitosis?",opts:["They replicate DNA","They organize and anchor the mitotic spindle","They are part of the nuclear membrane","They store chromosomes between divisions"],correct:1,exp:"Centrioles migrate to opposite poles of the cell and help organize the mitotic spindle — the microtubule structure that separates chromosomes."},
+  {text:"How many rounds of mitosis produce 16 cells from 1 starting cell?",opts:["2 rounds","4 rounds","8 rounds","16 rounds"],correct:1,exp:"Each mitotic division doubles the cell count: 1→2→4→8→16. It takes 4 rounds (2⁴ = 16)."},
+  {text:"Which statement about mitosis is TRUE?",opts:["It produces haploid daughter cells","Daughter cells are genetically identical to the parent cell","Crossing over occurs between homologs","It always produces exactly 4 cells"],correct:1,exp:"Mitosis produces 2 daughter cells that are genetically identical to each other and to the original parent cell."},
+  {text:"A diploid cell (2n=46) completes mitosis. Each daughter cell has:",opts:["23 chromosomes","46 chromosomes","92 chromosomes","12 chromosomes"],correct:1,exp:"Mitosis preserves the chromosome number — each of the 2 daughter cells receives the full complement of 46 chromosomes (2n)."},
+  {text:"The nuclear membrane disappears during which mitotic phase?",opts:["Interphase","Prophase","Metaphase","Telophase"],correct:1,exp:"During prophase, the nuclear envelope breaks down so spindle fibers can access and attach to chromosomes."},
+  {text:"What is the correct order of interphase stages?",opts:["G2 → S → G1","G1 → S → G2","S → G1 → G2","G1 → G2 → S"],correct:1,exp:"Interphase proceeds: G1 (primary growth phase) → S (DNA synthesis/replication) → G2 (final preparation for division)."},
+  {text:"Homologous chromosomes are defined as:",opts:["Two identical sister chromatids joined at centromere","A matched pair — one chromosome from mom, one from dad, carrying genes for the same traits","Two copies of the same chromatid after DNA replication","Chromosomes found only in haploid cells"],correct:1,exp:"Homologous chromosomes are pairs — one inherited from the mother and one from the father — that carry genes for the same traits at the same locus positions."},
+  {text:"Why is crossing over biologically important?",opts:["It causes harmful mutations","It generates genetic diversity by creating new allele combinations in gametes","It is required for cytokinesis to occur","It is required for DNA replication to begin"],correct:1,exp:"Crossing over exchanges DNA segments between homologous chromosomes, creating gametes with new combinations of alleles not found in either parent — driving genetic diversity."},
+  {text:"Sex chromosomes in a typical human female are:",opts:["XY","XX","YY","XO"],correct:1,exp:"Human females have two X chromosomes (XX). Human males have one X and one Y chromosome (XY)."},
+  {text:"What is a polar body in female meiosis?",opts:["A type of sex chromosome","A small, non-functional cell produced alongside the egg cell","The main functional egg cell (oocyte)","A type of immature sperm cell"],correct:1,exp:"During female meiosis, polar bodies are small non-functional cells that receive chromosomes but very little cytoplasm — they degenerate and don't become functional eggs."},
+  {text:"Which phase immediately follows metaphase in mitosis?",opts:["Prophase","Telophase","Anaphase","Cytokinesis"],correct:2,exp:"The sequence is Prophase → Metaphase → Anaphase → Telophase. Anaphase immediately follows metaphase — sister chromatids separate and move to opposite poles."},
+  {text:"In which organelle does cellular respiration mainly occur?",opts:["Nucleus","Ribosome","Mitochondria","Chloroplast"],correct:2,exp:"Cellular respiration occurs primarily in the mitochondria, converting glucose + oxygen → carbon dioxide + water + ATP energy."},
+  {text:"What does ATP stand for and what is its function?",opts:["Adenine triphosphate — builds chromosomes","Adenosine triphosphate — the cell's main energy currency","Amino triphosphate — makes proteins","Adenosine transport protein — moves chromosomes"],correct:1,exp:"ATP (Adenosine Triphosphate) is the cell's main energy currency. It is produced during cellular respiration and used to power nearly all cellular processes."},
+  {text:"Which of these is NOT a product of cellular respiration?",opts:["Carbon dioxide (CO₂)","Water (H₂O)","ATP energy","Glucose (C₆H₁₂O₆)"],correct:3,exp:"Glucose is a REACTANT (input) in cellular respiration, not a product. The products are CO₂, H₂O, and ATP."}
+];
+
+const CHALLENGE_QUESTIONS = [
+  {text:"A cell has 46 chromosomes after G2. After completing both Meiosis I and Meiosis II, how many chromosomes does each final daughter cell have?",opts:["46 chromosomes","23 chromosomes","12 chromosomes","92 chromosomes"],correct:1,exp:"Meiosis I halves the chromosome count from 46 to 23. Meiosis II separates sister chromatids — each of the 4 final cells still has 23 chromosomes (now single chromatids)."},
+  {text:"Starting with 1 cell that undergoes 4 complete rounds of mitosis, how many cells result?",opts:["4 cells","8 cells","16 cells","32 cells"],correct:2,exp:"Each mitotic division doubles the number: 1→2→4→8→16. After 4 rounds: 2⁴ = 16 cells total."},
+  {text:"Compare Metaphase I of meiosis vs. Metaphase II of meiosis. What is the key difference?",opts:["They are identical in every way","Metaphase I: homologous PAIRS align at equator; Metaphase II: individual chromosomes align (like mitosis)","Metaphase I has no spindle apparatus; Metaphase II does","Metaphase I occurs only in ovaries; Metaphase II occurs only in testes"],correct:1,exp:"Metaphase I: homologous chromosome pairs (tetrads) line up in a double row at the equator. Metaphase II: individual chromosomes (like mitosis) align in a single row. This is the fundamental structural difference."},
+  {text:"Why are the 4 daughter cells produced by meiosis genetically different from each other?",opts:["Because cytokinesis splits them unevenly","Because of crossing over in Prophase I AND random orientation of homologous pairs in Metaphase I","Because DNA replication introduces copying errors","Because the spindle fibers pull differently in each division"],correct:1,exp:"Two key mechanisms create diversity: (1) Crossing over in Prophase I exchanges segments between homologs; (2) Random/independent assortment of homologous pairs at Metaphase I shuffles which chromosomes go to each pole."},
+  {text:"A parent cell has 100 chromosomes after the G2 phase. How many chromosomes would each cell have at the end of Telophase II of meiosis?",opts:["100 chromosomes","50 chromosomes","25 chromosomes","200 chromosomes"],correct:1,exp:"G2: 100 chromosomes. After Meiosis I (reduction division): 50 chromosomes per cell. After Meiosis II (sister chromatids separate): still 50 chromosomes per cell (now as individual chromatids rather than joined pairs)."},
+  {text:"Why does mitosis NOT create genetic diversity, while meiosis does?",opts:["Mitosis uses chromosomes from only one parent","In mitosis, DNA is copied exactly and chromatids distributed identically — there is no crossing over or random assortment","Mitosis produces diploid cells so diversity is impossible","The mitotic cell cycle is too short for variation to occur"],correct:1,exp:"Mitosis produces exact clones — DNA replication copies the genome faithfully, sister chromatids separate identically to each daughter, and crucially there is NO crossing over and no random assortment of homologs."},
+  {text:"Chemotherapy drugs target rapidly dividing cells. Why do they also damage hair follicles, gut lining, and bone marrow?",opts:["These tissues undergo meiosis, not mitosis","These cells are permanently in G0 state so they can't recover","These tissues contain cells that divide constantly and rapidly — just like cancer cells, they spend more time in mitosis","These cells are haploid and therefore more vulnerable"],correct:2,exp:"Chemotherapy disrupts mitosis non-selectively — it kills any rapidly dividing cell. Hair follicles, epithelial cells of the gut, and bone marrow all divide constantly (to replace shed cells), so they suffer collateral damage, causing hair loss, nausea, and immune suppression."},
+  {text:"A sperm cell (n=23) fertilizes an egg (n=23). The resulting zygote undergoes many rounds of mitosis. What chromosome number do ALL body cells of the resulting organism have?",opts:["23 chromosomes","46 chromosomes","12 chromosomes","92 chromosomes"],correct:1,exp:"The zygote is diploid (2n=46). Every subsequent mitotic division faithfully reproduces this — all body cells of the organism will have 2n=46 chromosomes."},
+  {text:"A species has 2n=8 chromosomes. How many chromosomes are in each cell immediately after Meiosis I? After Meiosis II?",opts:["After MI: 4; After MII: 4","After MI: 8; After MII: 4","After MI: 4; After MII: 2","After MI: 2; After MII: 4"],correct:0,exp:"Meiosis I halves: 8→4 chromosomes per cell (still as sister chromatids joined). Meiosis II separates chromatids but doesn't reduce chromosome NUMBER — still 4 chromosomes per cell, now as individual single-chromatid chromosomes."},
+  {text:"Which cell cycle checkpoint failure would MOST directly lead to cancer development?",opts:["M checkpoint failure — spindle assembly problems","G1 checkpoint failure — allowing division despite DNA damage or missing growth signals","A single error in DNA replication — one wrong base pair","Meiosis I failure — causing extra chromosomes only in gametes"],correct:1,exp:"The G1 checkpoint is the primary cancer-related checkpoint (the 'restriction point'). If a cell bypasses it, it commits to dividing even with damaged DNA or without proper growth signals — the hallmark of cancer is this uncontrolled, checkpoint-ignoring proliferation."},
+  {text:"Explain why crossing over during Prophase I is said to create 'genetic diversity':",opts:["It increases the total chromosome number","It physically exchanges DNA segments between maternal and paternal homologs, creating chromosomes with entirely new allele combinations never seen before","It creates brand-new genes not found in either parent","It converts cells from diploid to haploid more quickly"],correct:1,exp:"Crossing over physically swaps segments between homologous chromosomes — one chromosome ends up part maternal and part paternal. This creates chromosomes carrying allele combinations that didn't exist in either parent, dramatically expanding genetic variation in offspring."},
+  {text:"If nondisjunction occurs during Anaphase I of meiosis, what is the consequence?",opts:["All 4 daughter cells will be completely normal","Homologous chromosomes fail to separate — some gametes get an extra chromosome (n+1), others get too few (n-1), which can cause Down syndrome","Sister chromatids fail to separate — this is the same as a mitosis error","The cell permanently enters the G0 non-dividing state"],correct:1,exp:"Nondisjunction in Anaphase I means homologous pairs don't separate properly. Resulting gametes have n+1 or n-1 chromosomes. Fertilization produces trisomy (e.g., trisomy 21 = Down syndrome) or monosomy — conditions caused by incorrect chromosome numbers."}
+];
+</script>
+</body>
+</html>
+ENDOFFILE
